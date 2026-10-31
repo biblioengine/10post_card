@@ -87,18 +87,44 @@ button:focus-visible{outline:2px solid var(--x);outline-offset:2px}
 .imgrow .pick input{position:absolute;inset:0;opacity:0;cursor:pointer;padding:0}
 .imgrow .rm{white-space:nowrap;border:0;background:none;color:var(--muted);font-size:12px;padding:4px;text-decoration:underline}
 .imgrow .rm[hidden]{display:none}
+.imgrow .pv{cursor:pointer}
+.imgrow .adj{padding:5px 10px;font-size:12px;white-space:nowrap;flex:none}
+.imgrow .adj[hidden]{display:none}
+
+/* PC：カードは画面の上に貼りつけたまま、入力欄だけが流れる */
+@media (min-width:641px){.cd .cdl{position:sticky;top:16px}}
+
+/* 画像の切り抜き */
+.crop{position:fixed;inset:0;z-index:30;background:rgba(8,10,14,.92);display:flex;justify-content:center}
+.crop[hidden]{display:none}
+.cropbox{width:min(760px,100%);height:100%;display:flex;flex-direction:column}
+.cropst{flex:1;min-height:0;position:relative;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.cropst.drag{cursor:grabbing}
+.cropst canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.cropct{flex:none;background:var(--panel);color:var(--fg);padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));border-radius:14px 14px 0 0}
+.cropct h4{margin:0 0 2px;font-size:15px}
+.cropct p{margin:0 0 10px;font-size:12px;color:var(--muted)}
+.cropct .zm{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;margin-bottom:12px}
+.cropct .zm input{flex:1;accent-color:var(--gold)}
+.cropct .zb{width:32px;height:32px;padding:0;font-size:18px;line-height:1}
+.cropbt{display:flex;gap:8px}.cropbt .btn{flex:1;padding:10px 12px}
 
 @media (max-width:640px){
-  .page{margin:0;border:0;border-radius:0;min-height:100vh;min-height:100dvh}
-  .ttl{padding:14px 14px 0;font-size:18px}
-  .cd{grid-template-columns:minmax(0,1fr);padding:0 14px 14px;gap:14px}
-  /* スマホ：カードと背景の色はいつも上に見えるように固定し、入力欄だけがスクロールする */
-  .cd .cdl{position:sticky;top:0;z-index:2;background:var(--panel);margin:0 -14px;padding:12px 14px 8px}
-  .cd .cdl::after{content:'';position:absolute;left:0;right:0;top:100%;height:22px;background:linear-gradient(var(--panel),transparent);pointer-events:none;opacity:0;transition:opacity .15s}
-  body.scrolled .cd .cdl::after{opacity:1}
-  .cd canvas{width:auto;max-height:36vh;margin:0 auto}
-  .cd .bgpick{margin:10px 0 0;gap:6px}.cd .bgpick .bgl{width:auto;margin-right:2px}
-  .cd .sw button{width:24px;height:24px}}
+  /* スマホ：ページ全体を画面（キーボードを除いた見えている範囲）に合わせて固定し、
+     上にカード、下に入力欄。入力欄だけがスクロールするので、文字を打っている間もカード全体が見える */
+  html,body{height:100%;overflow:hidden;overscroll-behavior:none}
+  .page{position:fixed;left:0;right:0;top:0;height:100vh;height:100dvh;margin:0;border:0;border-radius:0;max-width:none;display:flex;flex-direction:column}
+  .ttl{flex:none;padding:10px 14px 0;font-size:16px}
+  .cd{flex:1;min-height:0;display:flex;flex-direction:column;align-items:stretch;padding:0;gap:0}
+  .cd .cdl{flex:none;position:relative;z-index:2;background:var(--panel);padding:8px 14px 6px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;align-items:center}
+  .cd .cdl .bgpick{align-self:stretch}
+  .cd canvas{width:auto;height:auto;max-width:100%;max-height:var(--pvh,40vh);margin:0 auto;border-radius:8px;box-shadow:0 3px 12px rgba(0,0,0,.18)}
+  .cd .bgpick{margin:8px 0 0;gap:6px}.cd .bgpick .bgl{width:auto;margin-right:2px}
+  .cd .sw button{width:24px;height:24px}
+  .cd .form{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:14px 14px calc(24px + env(safe-area-inset-bottom,0px))}
+  /* キーボードが出ている間は、見出しと背景色の列をしまってカードを大きく見せる */
+  body.kb .ttl,body.kb .cd .bgpick{display:none}
+}
 </style>
 </head>
 <body>
@@ -115,7 +141,7 @@ button:focus-visible{outline:2px solid var(--x);outline-offset:2px}
           <label class="bna">なじませる<input type="range" id="cBnA" min="0" max="100" step="5" value="100" aria-label="ヘッダー画像を背景色になじませる強さ"></label></span>
       </div>
     </div>
-    <div>
+    <div class="form" id="form">
       <details class="prof" id="prof">
         <summary>プロフィール<span class="st" id="profSt"></span></summary>
         <div class="pb">
@@ -124,9 +150,11 @@ button:focus-visible{outline:2px solid var(--x);outline-offset:2px}
           <label for="uSub">サブタイトル<input id="uSub" autocomplete="off" maxlength="30" placeholder="例：HUNDRED DAYS CHALLENGE"></label>
           <div class="imgrow"><span class="lb">アイコン</span><span class="pv" id="avPv"></span>
             <span class="btn pick">選ぶ<input type="file" id="avIn" accept="image/*" aria-label="アイコン画像を選ぶ"></span>
+            <button type="button" class="btn adj" id="avAdj" hidden>位置・大きさ</button>
             <button type="button" class="rm" id="avRm" hidden>外す</button></div>
           <div class="imgrow"><span class="lb">ヘッダー画像</span><span class="pv bn" id="bnPv"></span>
             <span class="btn pick">選ぶ<input type="file" id="bnIn" accept="image/*" aria-label="ヘッダー画像を選ぶ"></span>
+            <button type="button" class="btn adj" id="bnAdj" hidden>位置・大きさ</button>
             <button type="button" class="rm" id="bnRm" hidden>外す</button></div>
           <label for="uName">名前<input id="uName" autocomplete="off" maxlength="40" placeholder="表示名"></label>
           <label for="uHandle">@ID<input id="uHandle" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="30" placeholder="@なしで入力"></label>
@@ -156,6 +184,20 @@ button:focus-visible{outline:2px solid var(--x);outline-offset:2px}
   </div>
 </div>
 
+<div class="crop" id="crop" hidden role="dialog" aria-modal="true" aria-labelledby="cropH">
+  <div class="cropbox">
+    <div class="cropst" id="cropSt"><canvas id="cropCv"></canvas></div>
+    <div class="cropct">
+      <h4 id="cropH">表示する範囲を選ぶ</h4>
+      <p>枠の中がカードに入ります。ドラッグで位置、2本指・ホイール・下のつまみで大きさを変えられます。</p>
+      <div class="zm"><button type="button" class="btn zb" id="cropMinus" aria-label="縮小">−</button>
+        <input type="range" id="cropZ" min="1" max="5" step="0.01" value="1" aria-label="拡大率">
+        <button type="button" class="btn zb" id="cropPlus" aria-label="拡大">＋</button></div>
+      <div class="cropbt"><button type="button" class="btn" id="cropNo">やめる</button><button type="button" class="btn primary" id="cropOk">決定</button></div>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ---------- 保存（この端末のブラウザだけ） ---------- */
 const LS={get(k,d){try{const v=localStorage.getItem('rcard:'+k);return v==null?d:v}catch{return d}},
@@ -166,9 +208,13 @@ const isoDay=t=>`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${
 function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3200)}
 
 /* プロフィール */
-const prof={name:'',handle:'',tag:'',start:'',goal:'',av:'',bn:'',title:'',sub:''};
+const prof={name:'',handle:'',tag:'',start:'',goal:'',av:'',bn:'',avSrc:'',bnSrc:'',avCrop:null,bnCrop:null,title:'',sub:''};
 try{Object.assign(prof,JSON.parse(LS.get('profile','{}')))}catch{}
-function saveProf(){if(!LS.set('profile',JSON.stringify(prof)))toast('保存できませんでした。画像を小さめのものにしてみてください')}
+function saveProf(){
+  if(LS.set('profile',JSON.stringify(prof)))return;
+  // 入りきらないときは、あとで調整し直すための元画像を手放して、切り抜いた画像だけを残す
+  if(prof.avSrc||prof.bnSrc){prof.avSrc='';prof.bnSrc='';if(LS.set('profile',JSON.stringify(prof))){toast('保存の容量が足りないため、元の画像は残せませんでした（調整し直すときは画像を選び直してください）');return}}
+  toast('保存できませんでした。画像を小さめのものにしてみてください')}
 const uTitle=document.getElementById('uTitle'),uSub=document.getElementById('uSub'),uName=document.getElementById('uName'),uHandle=document.getElementById('uHandle'),uTag=document.getElementById('uTag'),uStart=document.getElementById('uStart'),uGoal=document.getElementById('uGoal');
 const cleanHandle=s=>s.trim().replace(/^@+/,'').replace(/\s/g,'');
 
@@ -350,20 +396,121 @@ function showImgs(){
   const av=document.getElementById('avPv'),bn=document.getElementById('bnPv');
   av.style.backgroundImage=prof.av?`url(${prof.av})`:'';bn.style.backgroundImage=prof.bn?`url(${prof.bn})`:'';
   document.getElementById('avRm').hidden=!prof.av;document.getElementById('bnRm').hidden=!prof.bn;
+  document.getElementById('avAdj').hidden=!prof.av;document.getElementById('bnAdj').hidden=!prof.bn;
   // ヘッダー画像のオンオフ・なじませるは、ヘッダー画像があるときだけ出す
   document.getElementById('cBnW').hidden=!prof.bn;
   cardImg=loadImg(prof.av);cardBn=loadImg(prof.bn);
   redrawCard();
 }
-async function pickImg(input,key,maxW,maxH){
-  const f=input.files&&input.files[0];input.value='';if(!f)return;
-  try{prof[key]=await shrink(f,maxW,maxH);saveProf();showImgs();profState()}
-  catch{toast('この画像は読み込めませんでした')}
+
+/* ---------- 切り抜き：枠の中に入る範囲を、ドラッグと拡大縮小で決める ---------- */
+// アイコンは丸（正方形）、ヘッダーはカードに敷く範囲と同じ横長の比率
+const CROP={av:{ratio:1,round:true,ow:480,oh:480,src:1200},bn:{ratio:1024/294,round:false,ow:1500,oh:Math.round(1500*294/1024),src:2000}};
+const cropEl=document.getElementById('crop'),cropSt=document.getElementById('cropSt'),cropCv=document.getElementById('cropCv'),cropZ=document.getElementById('cropZ');
+const cs={kind:'',img:null,src:'',z:1,x:0,y:0,L:null}; // x,y：枠の中心からの画像の中心のずれ（枠の幅を1とする）
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+function cropLayout(){
+  const w=cropSt.clientWidth,h=cropSt.clientHeight,dpr=window.devicePixelRatio||1,r=CROP[cs.kind].ratio,m=Math.min(32,w*.06);
+  const fw=Math.min(w-m*2,(h-m*2)*r),fh=fw/r;
+  cropCv.width=Math.round(w*dpr);cropCv.height=Math.round(h*dpr);
+  cs.L={w,h,dpr,fw,fh,fx:(w-fw)/2,fy:(h-fh)/2};
 }
-document.getElementById('avIn').addEventListener('change',e=>pickImg(e.target,'av',480,480));
-document.getElementById('bnIn').addEventListener('change',e=>pickImg(e.target,'bn',1500,1500));
-document.getElementById('avRm').onclick=()=>{prof.av='';saveProf();showImgs();profState()};
-document.getElementById('bnRm').onclick=()=>{prof.bn='';saveProf();showImgs();profState()};
+function cropScale(){const L=cs.L,i=cs.img;return Math.max(L.fw/i.naturalWidth,L.fh/i.naturalHeight)*cs.z}
+function cropClamp(){
+  const L=cs.L,i=cs.img,s=cropScale(),iw=i.naturalWidth*s/L.fw,ih=i.naturalHeight*s/L.fw,fh=L.fh/L.fw;
+  cs.x=clamp(cs.x,-(iw-1)/2,(iw-1)/2);cs.y=clamp(cs.y,-(ih-fh)/2,(ih-fh)/2);
+}
+function cropRect(){ // 画像の表示位置（画面のpx）
+  const L=cs.L,i=cs.img,s=cropScale(),w=i.naturalWidth*s,h=i.naturalHeight*s;
+  return{x:L.fx+L.fw/2+cs.x*L.fw-w/2,y:L.fy+L.fh/2+cs.y*L.fw-h/2,w,h,s};
+}
+function cropDraw(){
+  if(!cs.L||!cs.img)return;
+  const L=cs.L,ctx=cropCv.getContext('2d'),R=cropRect();
+  ctx.setTransform(L.dpr,0,0,L.dpr,0,0);ctx.clearRect(0,0,L.w,L.h);
+  ctx.imageSmoothingQuality='high';ctx.drawImage(cs.img,R.x,R.y,R.w,R.h);
+  // 枠の外を暗くする
+  ctx.fillStyle='rgba(8,10,14,.66)';ctx.beginPath();ctx.rect(0,0,L.w,L.h);
+  if(CROP[cs.kind].round)ctx.arc(L.fx+L.fw/2,L.fy+L.fh/2,L.fw/2,0,Math.PI*2,true);else ctx.rect(L.fx,L.fy,L.fw,L.fh);
+  ctx.fill('evenodd');
+  ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.beginPath();
+  if(CROP[cs.kind].round)ctx.arc(L.fx+L.fw/2,L.fy+L.fh/2,L.fw/2,0,Math.PI*2);else ctx.rect(L.fx,L.fy,L.fw,L.fh);
+  ctx.stroke();
+  // 三分割の補助線
+  ctx.strokeStyle='rgba(255,255,255,.28)';ctx.lineWidth=1;ctx.beginPath();
+  for(const k of [1,2]){ctx.moveTo(L.fx+L.fw*k/3,L.fy);ctx.lineTo(L.fx+L.fw*k/3,L.fy+L.fh);ctx.moveTo(L.fx,L.fy+L.fh*k/3);ctx.lineTo(L.fx+L.fw,L.fy+L.fh*k/3)}
+  ctx.stroke();
+}
+function cropZoom(z,px,py){ // px,py：その点を中心に拡大縮小（画面のpx）
+  const L=cs.L,z0=cs.z;z=clamp(z,1,5);if(z===z0)return;
+  if(px!=null){const cx=L.fx+L.fw/2,cy=L.fy+L.fh/2,k=z/z0;
+    cs.x=((px-cx)/L.fw)-((px-cx)/L.fw-cs.x)*k;cs.y=((py-cy)/L.fw)-((py-cy)/L.fw-cs.y)*k}
+  else{cs.x*=z/z0;cs.y*=z/z0}
+  cs.z=z;cropZ.value=z;cropClamp();cropDraw();
+}
+let cropDone=null;
+function openCrop(kind,src,saved){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      Object.assign(cs,{kind,img,src,z:saved?.z||1,x:saved?.x||0,y:saved?.y||0});
+      cropEl.hidden=false;document.body.style.overflow='hidden';
+      document.getElementById('cropH').textContent=kind==='av'?'アイコンに表示する範囲を選ぶ':'ヘッダーに表示する範囲を選ぶ';
+      cropLayout();cropZ.value=cs.z;cropClamp();cropDraw();
+      cropDone=res;document.getElementById('cropOk').focus();
+    };
+    img.onerror=()=>{toast('この画像は読み込めませんでした');res(null)};
+    img.src=src;
+  });
+}
+function closeCrop(ok){
+  if(cropEl.hidden)return;
+  let out=null;
+  if(ok){const c=CROP[cs.kind],L=cs.L,R=cropRect(),o=document.createElement('canvas');o.width=c.ow;o.height=c.oh;
+    const g=o.getContext('2d');g.imageSmoothingQuality='high';
+    g.drawImage(cs.img,(L.fx-R.x)/R.s,(L.fy-R.y)/R.s,L.fw/R.s,L.fh/R.s,0,0,c.ow,c.oh);
+    out={img:o.toDataURL('image/jpeg',.9),crop:{z:cs.z,x:cs.x,y:cs.y}}}
+  cropEl.hidden=true;document.body.style.overflow='';
+  const r=cropDone;cropDone=null;r&&r(out);
+}
+document.getElementById('cropOk').onclick=()=>closeCrop(true);
+document.getElementById('cropNo').onclick=()=>closeCrop(false);
+document.getElementById('cropPlus').onclick=()=>cropZoom(cs.z*1.15);
+document.getElementById('cropMinus').onclick=()=>cropZoom(cs.z/1.15);
+cropZ.addEventListener('input',()=>cropZoom(+cropZ.value));
+addEventListener('keydown',e=>{if(!cropEl.hidden&&e.key==='Escape')closeCrop(false)});
+addEventListener('resize',()=>{if(!cropEl.hidden){cropLayout();cropClamp();cropDraw()}});
+// ドラッグ（1本指・マウス）と、2本指の拡大縮小
+{const pts=new Map();let pinch=null;
+  const pos=e=>{const r=cropSt.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+  cropSt.addEventListener('pointerdown',e=>{cropSt.setPointerCapture(e.pointerId);pts.set(e.pointerId,pos(e));cropSt.classList.add('drag');
+    if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cs.z}}});
+  cropSt.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;const p=pos(e),q=pts.get(e.pointerId);pts.set(e.pointerId,p);
+    if(pts.size===1){cs.x+=(p.x-q.x)/cs.L.fw;cs.y+=(p.y-q.y)/cs.L.fw;cropClamp();cropDraw()}
+    else if(pts.size===2&&pinch){const [a,b]=[...pts.values()],d=Math.hypot(a.x-b.x,a.y-b.y);
+      cs.x+=(p.x-q.x)/2/cs.L.fw;cs.y+=(p.y-q.y)/2/cs.L.fw;
+      cropZoom(pinch.z*d/pinch.d,(a.x+b.x)/2,(a.y+b.y)/2);cropClamp();cropDraw()}});
+  const up=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size)cropSt.classList.remove('drag')};
+  cropSt.addEventListener('pointerup',up);cropSt.addEventListener('pointercancel',up);
+  cropSt.addEventListener('wheel',e=>{e.preventDefault();const p=pos(e);cropZoom(cs.z*Math.exp(-e.deltaY*.0015),p.x,p.y)},{passive:false});
+}
+async function editImg(kind,src,saved){
+  const r=await openCrop(kind,src,saved);if(!r)return;
+  prof[kind]=r.img;prof[kind+'Src']=src;prof[kind+'Crop']=r.crop;saveProf();showImgs();profState();
+}
+async function pickImg(input,kind){
+  const f=input.files&&input.files[0];input.value='';if(!f)return;
+  let src;try{src=await shrink(f,CROP[kind].src,CROP[kind].src)}catch{toast('この画像は読み込めませんでした');return}
+  editImg(kind,src,null);
+}
+// 調整し直す：元の画像が残っていればそれを、なければ今の画像を使う
+function readjust(kind){const src=prof[kind+'Src']||prof[kind];if(src)editImg(kind,src,prof[kind+'Src']?prof[kind+'Crop']:null)}
+document.getElementById('avIn').addEventListener('change',e=>pickImg(e.target,'av'));
+document.getElementById('bnIn').addEventListener('change',e=>pickImg(e.target,'bn'));
+document.getElementById('avAdj').onclick=()=>readjust('av');document.getElementById('bnAdj').onclick=()=>readjust('bn');
+document.getElementById('avPv').onclick=()=>readjust('av');document.getElementById('bnPv').onclick=()=>readjust('bn');
+document.getElementById('avRm').onclick=()=>{prof.av='';prof.avSrc='';prof.avCrop=null;saveProf();showImgs();profState()};
+document.getElementById('bnRm').onclick=()=>{prof.bn='';prof.bnSrc='';prof.bnCrop=null;saveProf();showImgs();profState()};
 
 /* ---------- プロフィールの入力 ---------- */
 function profState(){
@@ -425,8 +572,26 @@ document.getElementById('cardShare').onclick=()=>cardFile(async f=>{try{await na
 {const probe=new File([new Blob(['x'],{type:'image/png'})],'x.png',{type:'image/png'});
   document.getElementById('cardShare').hidden=!(navigator.canShare&&navigator.canShare({files:[probe]}))}
 
-// スマホ：スクロールしたらカードの下に影を出す
-addEventListener('scroll',()=>document.body.classList.toggle('scrolled',scrollY>2),{passive:true});
+/* ---------- スマホ：キーボードが出ても、見えている範囲にカードと入力欄を収める ---------- */
+{const page=document.querySelector('.page'),form=document.getElementById('form'),mq=matchMedia('(max-width:640px)'),vv=window.visualViewport;
+  let full=0;
+  function fitView(){
+    if(!mq.matches){page.style.top=page.style.height='';document.body.classList.remove('kb');return}
+    const h=vv?vv.height:innerHeight,top=vv?vv.offsetTop:0;
+    full=Math.max(full,h);const kb=h<full*.78;
+    document.body.classList.toggle('kb',kb);
+    page.style.top=top+'px';page.style.height=h+'px';
+    // カードの高さ：キーボードが出ていても全体が見える大きさにする
+    page.style.setProperty('--pvh',Math.round(kb?Math.max(130,h*.44):Math.min(h*.46,520))+'px');
+  }
+  if(vv){vv.addEventListener('resize',fitView);vv.addEventListener('scroll',fitView)}
+  let lastW=innerWidth;addEventListener('resize',()=>{if(innerWidth!==lastW){lastW=innerWidth;full=0}fitView()}); // 向きが変わったときだけ基準の高さを測り直すmq.addEventListener?.('change',fitView);
+  fitView();
+  // 入力欄を選んだら、その欄が入力エリアの中で見えるようにする（ページ全体は動かさない）
+  form.addEventListener('focusin',e=>{if(!mq.matches)return;const el=e.target;
+    setTimeout(()=>{const r=el.getBoundingClientRect(),f=form.getBoundingClientRect();
+      if(r.top<f.top+8||r.bottom>f.bottom-8)form.scrollTop+=r.top-f.top-Math.max(12,(f.height-r.height)/3)},260)});
+}
 
 showImgs();drawCard();loadFonts().then(redrawCard);
 </script>
